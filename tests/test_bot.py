@@ -108,8 +108,17 @@ class FlowTests(unittest.TestCase):
 
 class ValidationTests(unittest.TestCase):
     def test_phone(self):
-        for p in ['+213555123456','213 555 123 456']: self.assertEqual(phone(p),'+213555123456')
-        for p in ['0555123456','+2130555123456','+33123456789','+21355512345','+2135551234567']:
+        accepted = {
+            '+213555123456': '+213555123456',
+            '213 555 123 456': '+213555123456',
+            '+213101283986': '+213101283986',
+            '213101283986': '+213101283986',
+            '+2131': '+2131',
+            '+2135551234567': '+2135551234567',
+        }
+        for raw, normalized in accepted.items():
+            self.assertEqual(phone(raw), normalized)
+        for p in ['0555123456','+2130555123456','2130555123456','+33123456789','+213','213','+213abc']:
             with self.assertRaises(ValueError): phone(p)
     def test_amount(self):
         for p in ['NaN','Infinity','-1','0','1.234','hello']:

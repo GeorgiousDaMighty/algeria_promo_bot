@@ -20,7 +20,7 @@ PAYMENTS = ['Espèces', 'Carte EDAHABIA', 'BaridiMob / BaridiWeb', 'Carte CIB',
             'Application bancaire', 'SlickPay', 'Visa / Mastercard', 'Aucun', 'Autre']
 STAGES = {
  'interest': ('La personne souhaite essayer JET ?', [('Oui', 'yes'), ('Non / impossible', 'no')]),
- 'phone': ('Numéro utilisé pour JET, avec son accord : +213 suivi de 9 chiffres, sans le 0 initial. Exemple : +213555123456.', []),
+ 'phone': ('Numéro utilisé pour JET, avec son accord : commencez par +213 ou 213, sans 0 juste après le code pays. Exemple : +213101283986.', []),
  'jet': ('Aidez la personne à installer JET et à créer son compte.', [('JET installé / compte prêt', 'next')]),
  'slick': ('Aidez la personne à installer et configurer SlickPay pour le paiement JET.', [('SlickPay prêt', 'next')]),
  'attempt': ('Demandez à la personne de tenter de recharger son portefeuille JET.', [('Tentative effectuée', 'next')]),
@@ -34,8 +34,8 @@ MILESTONES = {'jet':'jet_ready', 'slick':'slick_ready', 'attempt':'topup_attempt
 
 def phone(value):
     value = re.sub(r'[\s()\-]', '', value)
-    if not re.fullmatch(r'\+?213[567][0-9]{8}', value):
-        raise ValueError('Format requis : +213555123456 (mobile algérien, sans 0 après 213).')
+    if not re.fullmatch(r'\+?213[1-9][0-9]*', value):
+        raise ValueError('Format requis : numéro commençant par +213 ou 213, sans 0 après 213.')
     return '+' + value.lstrip('+')
 
 
@@ -159,7 +159,7 @@ class Bot:
         elif mode == 'topup':
             step = st['step']
             if step == 'phone':
-                text = 'Numéro JET à recharger : +213 et 9 chiffres, sans le 0 initial. Exemple : +213555123456.'
+                text = 'Numéro JET à recharger : commencez par +213 ou 213, sans 0 juste après le code pays.'
             elif step == 'reason':
                 text = 'Motif de la recharge manuelle ?'
                 buttons = [('Compensation : paiement non reçu','compensation'), ('Bonus promotionnel','promo')]
