@@ -47,11 +47,22 @@ class FlowTests(unittest.TestCase):
         self.b.scheduled(t); self.b.scheduled(t+3600)
         texts=[json.loads(r[0]).get('text','') for r in self.s.q('SELECT payload FROM outbox')]
         self.assertEqual(sum('RÉCAPITULATIF QUOTIDIEN' in t for t in texts),1)
-    def test_cohort_conversion(self):
+    def test_report_is_concise_and_export_keeps_funnel_details(self):
         self.start(); self.send(action='yes'); self.send('+213555123456')
         for _ in range(5): self.send(action='next')
-        self.send(action='skip'); self.start()
-        self.assertIn('conversion course 50%',self.b.report())
+        self.send(action='skip')
+        self.start(); self.send(action='no'); self.send(action='reason:0'); self.send(action='noanswer'); self.send(action='skip')
+        self.start(); self.send('Erreur inscription'); self.send(action='submit'); self.send(action='abort')
+        report=self.b.report()
+        self.assertIn('Approches : 3',report)
+        self.assertIn('Succès (course effectuée) : 1',report)
+        self.assertIn('Erreurs signalées : 1',report)
+        self.assertIn('Refus : 1',report)
+        self.assertIn('Pas le temps / plus tard : 1',report)
+        self.assertNotIn('Cohorte',report); self.assertNotIn('conversion',report); self.assertNotIn('{"',report)
+        self.b.export(1)
+        payload=json.loads(self.s.q("SELECT payload FROM outbox WHERE method='_csv' ORDER BY id DESC LIMIT 1").fetchone()[0])
+        self.assertIn('phone_saved',payload['content']); self.assertIn('ride_done',payload['content']); self.assertIn('incident',payload['content'])
     def test_stale_button(self):
         up=self.send(action='new'); up['update_id']=1000; self.b.handle(up)
         self.assertEqual(self.state()['stage'],'interest')

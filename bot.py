@@ -187,46 +187,34 @@ class Bot:
 
     def report(self, start=0, end=None):
         end = end or time.time()
-        rows = self.s.q('''SELECT u.name,e.user_id,e.kind,COUNT(*) n FROM events e JOIN users u ON u.id=e.user_id
-          WHERE e.at>=? AND e.at<? GROUP BY e.user_id,e.kind ORDER BY e.user_id,e.kind''',(start,end)).fetchall()
-        text = f'JET • activité {stamp(start) if start else "depuis le début"} → {stamp(end)} (Alger)\n'
-        text += 'Événements de la période, pas une cohorte : les étapes peuvent concerner des contacts plus anciens.\n'
-        names = {'approached':'Approchés','interested':'Intéressés','phone_saved':'Téléphone saisi',
-                 'jet_ready':'JET prêt','slick_ready':'SlickPay prêt','topup_attempted':'Tentatives recharge',
-                 'topup_success':'Recharges réussies','ride_done':'Courses','incident':'Incidents',
-                 'refused':'Refus','aborted':'Interruptions','manual_topup':'Demandes recharge', 'closed':'Contacts terminés'}
-        for r in rows:
-            if r['kind'] in names:
-                text += f"{r['name']} ({r['user_id']}) • {names[r['kind']]} : {r['n']}\n"
-        if not rows:
-            text += 'Aucune activité.\n'
-        reasons = self.s.q("SELECT data FROM events WHERE kind='refused' AND at>=? AND at<?",(start,end)).fetchall()
-        counts={}
-        for r in reasons:
-            reason=json.loads(r[0])['reason']; counts[reason]=counts.get(reason,0)+1
-        if counts:
-            text += '\nMotifs de refus :\n'+'\n'.join(f'{k}: {v}' for k,v in counts.items())+'\n'
-        active=self.s.q("SELECT COUNT(*) FROM contacts WHERE status='active'").fetchone()[0]
-        text += f'\nContacts encore ouverts (total actuel) : {active}'
-        cohorts=self.s.q('''SELECT c.user_id,u.name,c.status,c.data FROM contacts c JOIN users u ON u.id=c.user_id
-                            WHERE c.started>=? AND c.started<?''',(start,end)).fetchall()
+        rows = self.s.q('''SELECT u.name,e.user_id,e.kind,e.data FROM events e JOIN users u ON u.id=e.user_id
+          WHERE e.at>=? AND e.at<? AND e.kind IN ('approached','ride_done','incident','refused')
+          ORDER BY e.user_id,e.id''',(start,end)).fetchall()
         stats={}
-        for c in cohorts:
-            key=(c['user_id'],c['name']); entry=stats.setdefault(key,{'total':0,'rides':0,'paid':0,'active':0})
-            entry['total']+=1; data=json.loads(c['data'])
-            entry['rides']+=int('ride_done' in data); entry['paid']+=int('topup_success' in data)
-            entry['active']+=int(c['status']=='active')
-        if stats:
-            text += '\n\nCohorte : contacts commencés pendant la période, progression connue au moment du rapport.\n'
-            for (pid,name),v in stats.items():
-                text += f"{name} ({pid}) : {v['total']} contacts, {v['paid']} payés, {v['rides']} courses, conversion course {v['rides']/v['total']:.0%}, {v['active']} ouverts.\n"
-
-        for c in cohorts:
-            d=json.loads(c['data'])
-            details={k:d[k] for k in ['reason','reason_other','payments','acceptable_price_dzd','change_decision','abort_reason','comment'] if d.get(k) is not None and d.get(k) != ''}
-            if details:
-                text += '\n'+c['name']+' • '+json.dumps(details,ensure_ascii=False)
-        return text
+        keys={'approached':'approaches','ride_done':'successes','incident':'incidents','refused':'refusals'}
+        for r in rows:
+            key=(r['user_id'],r['name'])
+            entry=stats.setdefault(key,{'approaches':0,'successes':0,'incidents':0,'refusals':0,'reasons':{}})
+            entry[keys[r['kind']]]+=1
+            if r['kind']=='refused':
+                reason=json.loads(r['data'] or '{}').get('reason') or 'Non précisé'
+                entry['reasons'][reason]=entry['reasons'].get(reason,0)+1
+        text = f'JET • résultats {stamp(start) if start else "depuis le début"} → {stamp(end)} (Alger)\n'
+        text += 'Synthèse par promoteur. Le détail complet des sessions et étapes reste disponible dans l’export CSV.\n'
+        if not stats:
+            return text+'\nAucune activité.'
+        for (pid,name),v in stats.items():
+            text += (f'\n{name} ({pid})\n'
+                     f'• Approches : {v["approaches"]}\n'
+                     f'• Succès (course effectuée) : {v["successes"]}\n'
+                     f'• Erreurs signalées : {v["incidents"]}\n'
+                     f'• Refus : {v["refusals"]}\n')
+            if v['reasons']:
+                text += '• Motifs de refus :\n'
+                text += ''.join(f'  – {reason} : {count}\n' for reason,count in v['reasons'].items())
+            else:
+                text += '• Motifs de refus : aucun\n'
+        return text.rstrip()
 
     def export(self, uid):
         out=io.StringIO(); w=csv.writer(out)
