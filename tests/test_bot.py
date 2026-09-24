@@ -56,6 +56,15 @@ class FlowTests(unittest.TestCase):
         up=self.send(action='new'); up['update_id']=1000; self.b.handle(up)
         self.assertEqual(self.state()['stage'],'interest')
         self.assertEqual(self.s.q('SELECT count(*) FROM contacts').fetchone()[0],1)
+    def test_abort_at_interest_needs_no_reason_or_comment(self):
+        self.start(); self.send(action='abort')
+        self.assertEqual(self.state()['mode'],'menu')
+        contact=self.s.q('SELECT status,data,ended FROM contacts').fetchone()
+        self.assertEqual(contact['status'],'aborted')
+        self.assertEqual(json.loads(contact['data']),{})
+        self.assertIsNotNone(contact['ended'])
+        events=[r[0] for r in self.s.q('SELECT kind FROM events')]
+        self.assertIn('aborted',events); self.assertIn('closed',events)
     def test_incident_media_and_resume(self):
         self.start(); self.send('Bug observé',photo=[{'file_id':'photo-a'}]); self.send('',video={'file_id':'video-b'}); self.send(action='submit')
         self.assertEqual(self.state()['stage'],'interest'); self.assertEqual(self.state()['mode'],'flow')

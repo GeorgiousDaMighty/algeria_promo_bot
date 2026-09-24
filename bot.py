@@ -377,7 +377,14 @@ class Bot:
             st['draft']['media']+=media
             s.say(uid,f'Pièces reçues : {len(st["draft"]["media"])}. Description : {len(st["draft"]["text"])} message(s).'); return
         stage=st['stage']
-        if action=='abort': st['mode']='abort'; return
+        if action=='abort':
+            if stage=='interest':
+                st['outcome']='aborted'
+                s.event(uid,st['cid'],'aborted',{'reason':None})
+                self.close(uid,st)
+            else:
+                st['mode']='abort'
+            return
         if action in ['incident','failure'] or media or (content and stage in STAGES and stage!='phone'):
             st['mode']='incident'; st['draft']={'text':[content] if content else [],'media':media}
             if action=='failure': st['draft']['text']=['Échec de recharge du portefeuille JET.']; s.event(uid,st['cid'],'payment_failed')
